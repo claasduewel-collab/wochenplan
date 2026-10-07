@@ -1,1 +1,5 @@
-{ "status": "leer" }
+{
+ "status": "fehler",
+ "fehler": "Nur 0 Angebote erkannt – Prospekt vermutlich nicht lesbar.",
+ "fehler_zeit": "2026-10-07T22:19:15.106Z"
+}
