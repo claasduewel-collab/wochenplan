@@ -1,0 +1,10 @@
+{
+  "name": "Wochenplan",
+  "short_name": "Wochenplan",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f4ee",
+  "theme_color": "#2f6b3a",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }]
+}

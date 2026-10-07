@@ -1,0 +1,118 @@
+{
+  "filiale": "Lidl Harvey-Benjamin-Fuller-Straße 5, 21335 Lüneburg",
+  "personen": 2,
+  "personenHinweis": "Gekocht wird für 2 Personen, jede Mahlzeit wird 50/50 geteilt. Die Ziele unten gelten für EINE Person (Claas).",
+  "ziele": {
+    "kcal": 2200,
+    "protein": 220,
+    "fett": 75,
+    "kh": 160
+  },
+  "feste_extras": [
+    {
+      "name": "Shake morgens (mit 300 ml Alpro Mandel ungesüßt)",
+      "kcal": 152,
+      "protein": 23,
+      "fett": null,
+      "kh": null
+    },
+    {
+      "name": "Shake abends (mit 300 ml Alpro Mandel ungesüßt)",
+      "kcal": 152,
+      "protein": 23,
+      "fett": null,
+      "kh": null
+    }
+  ],
+  "mahlzeiten": [
+    {
+      "slot": "mittag",
+      "label": "Mittag",
+      "art": "kalt",
+      "hinweis": "Kalt, gut vorzubereiten und mitzunehmen"
+    },
+    {
+      "slot": "abend",
+      "label": "Abend",
+      "art": "warm",
+      "hinweis": "Warm gekocht"
+    }
+  ],
+  "tage": [
+    "Montag",
+    "Dienstag",
+    "Mittwoch",
+    "Donnerstag",
+    "Freitag",
+    "Samstag",
+    "Sonntag"
+  ],
+  "kein_schwein": true,
+  "mag_nicht": [
+    "Süßkartoffeln",
+    "Spargel",
+    "Pilze",
+    "Garnelen",
+    "Kidneybohnen",
+    "schwarze Bohnen",
+    "Thunfisch",
+    "Zuckerschoten",
+    "Whey",
+    "Skyr",
+    "Magerquark"
+  ],
+  "mag_nicht_gerichte": [],
+  "vorrat": [
+    "Salz",
+    "Pfeffer",
+    "Paprikapulver",
+    "Currypulver",
+    "Oregano",
+    "Knoblauchpulver",
+    "Sojasauce",
+    "Senf",
+    "Essig",
+    "Brühe-Pulver",
+    "Speiseöl (wird mit eingerechnet)"
+  ],
+  "basispreise_hinweis": "Grobe Lidl-Normalpreise als Orientierung, wenn etwas nicht im Prospekt ist. Bei Bedarf anpassen.",
+  "basispreise": {
+    "Hähnchenbrustfilet 1000 g": 9.99,
+    "Putenbrust-Geschnetzeltes 400 g": 4.49,
+    "Rinderhackfleisch 500 g": 5.49,
+    "Eier Bodenhaltung 10er (ca. 600 g)": 2.39,
+    "Speisequark 20 % 500 g": 1.49,
+    "Hüttenkäse 200 g": 0.99,
+    "Körniger Frischkäse light 200 g": 1.09,
+    "Mozzarella light 125 g": 0.89,
+    "Haferflocken 500 g": 0.79,
+    "Basmatireis 1000 g": 2.29,
+    "Vollkornnudeln 500 g": 1.19,
+    "Kartoffeln 2500 g": 2.99,
+    "Vollkorn-Wraps 6er (370 g)": 1.69,
+    "Rote Linsen 500 g": 1.49,
+    "Kichererbsen Dose (240 g Abtropf)": 0.75,
+    "Passierte Tomaten 500 g": 0.59,
+    "Paprika rot 500 g": 1.99,
+    "Zwiebeln 1000 g": 1.29,
+    "Brokkoli 500 g": 1.49,
+    "Gurke 1 Stück (ca. 400 g)": 0.69,
+    "Tomaten 500 g": 1.49,
+    "Blattspinat TK 750 g": 1.49,
+    "Gemüsemischung TK 750 g": 1.79,
+    "Bananen 1000 g": 1.39,
+    "Äpfel 1000 g": 1.99,
+    "Rapsöl 1000 ml": 1.99,
+    "Olivenöl 500 ml": 5.99
+  },
+  "budget_pro_woche_euro": null,
+  "regeln": [
+    "Keine Reste: jede gekaufte Packung wird in der Woche komplett verbraucht (außer Vorrat).",
+    "Zutaten wandern zwischen Tagen weiter (z. B. Hähnchen vom Montag im Wrap am Dienstag).",
+    "Möglichst günstig: Prospekt-Angebote bevorzugen.",
+    "Alle Mengen nur in Gramm, keine Stück, EL oder TL.",
+    "Nicht mehr als 2 Mal dasselbe Gericht pro Woche."
+  ],
+  "modell": "gemini-2.5-flash",
+  "max_prospektseiten": 30
+}
