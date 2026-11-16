@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { zielTag, prospekteAusHtml, prospektWaehlen, lebensmittelSeiten, modellWaehlen, jsonLesen, lesePrompt } from '../update.mjs';
+import { modellListe, zielTag, prospekteAusHtml, prospektWaehlen, lebensmittelSeiten, modellWaehlen, jsonLesen, lesePrompt } from '../update.mjs';
 
 test('zielTag: sonntags die kommende Woche, sonst heute', () => {
   assert.equal(zielTag(new Date('2026-11-15T12:00:00Z')).toISOString().slice(0, 10), '2026-11-16');
@@ -39,4 +39,10 @@ test('jsonLesen verträgt Code-Zäune und Vorgeplänkel', () => {
 test('Lese-Auftrag enthält den Katalog ohne Grundvorrat', () => {
   const p = lesePrompt('Lidl', [{ id: 'eier', name: 'Eier' }, { id: 'rapsoel', name: 'Rapsöl', basis: true }]);
   assert.ok(p.includes('eier: Eier') && !p.includes('rapsoel'));
+});
+
+test('Ausweichliste: stabile Modelle zuerst, Lite als Reserve', () => {
+  const m = (name) => ({ name: 'models/' + name, supportedGenerationMethods: ['generateContent'] });
+  assert.deepEqual(modellListe([m('gemini-2.5-flash-lite'), m('gemini-2.5-flash'), m('gemini-3.0-flash-preview'), m('gemini-3.0-flash'), m('gemini-3.0-pro'), m('gemini-2.5-flash-image')]),
+    ['gemini-3.0-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.0-flash-preview']);
 });
