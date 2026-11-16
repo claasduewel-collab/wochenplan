@@ -115,6 +115,7 @@ export function jsonLesen(text) {
 }
 
 class SchluesselFehler extends Error {}
+class KontingentFehler extends Error {}
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
 let modell = null;
 
@@ -129,34 +130,66 @@ export function modellWaehlen(liste) {
   return ok.sort((a, b) => version(b) - version(a) || stabil(b) - stabil(a) || a.length - b.length)[0] || null;
 }
 
+/** Alle brauchbaren Flash-Modelle, bestes zuerst – als Ausweichliste bei Überlastung oder leerem Kontingent. */
+export function modellListe(liste) {
+  const ok = (liste || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => m.name.replace(/^models\//, ''))
+    .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/image|tts|live|audio|embedding|thinking/.test(n));
+  const version = (n) => parseFloat(n.match(/^gemini-([\d.]+)/)[1]);
+  const rang = (n) => (/preview|exp/.test(n) ? 0 : 2) + (/lite/.test(n) ? 0 : 1);
+  return ok.sort((a, b) => rang(b) - rang(a) || version(b) - version(a) || a.length - b.length);
+}
+
+let ausweich = null; // weitere Modelle, falls das aktuelle nicht kann
+const start = Date.now();
+export const ZEIT_UM = () => Date.now() - start > 20 * 60000; // GitHub bricht nach 30 Min. ab – vorher speichern
+
+async function naechstesModell(key, grund) {
+  if (!ausweich) {
+    const liste = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } }).then((r) => r.json()).catch(() => ({}));
+    ausweich = modellListe(liste.models).filter((m) => m !== modell);
+  }
+  const neu = ausweich.shift();
+  if (neu) { log(`${modell}: ${grund} – weiche auf ${neu} aus.`); modell = neu; }
+  return !!neu;
+}
+
 async function gemini(cfg, parts, { temperature = 0 } = {}) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key || !key.trim()) throw new SchluesselFehler('Der Gemini-Schlüssel fehlt (GitHub → Settings → Secrets and variables → Actions → GEMINI_API_KEY).');
+  const roh = process.env.GEMINI_API_KEY;
+  if (!roh || !roh.trim()) throw new SchluesselFehler('Der Gemini-Schlüssel fehlt (GitHub → Settings → Secrets and variables → Actions → GEMINI_API_KEY).');
+  const key = roh.trim();
   modell ||= cfg.modell || 'gemini-2.5-flash';
   const body = JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { temperature, responseMimeType: 'application/json' } });
-  for (let versuch = 1; versuch <= 6; versuch++) {
-    const res = await fetch(`${GEMINI}/models/${modell}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key.trim() }, body });
-    if (res.status === 429 || res.status >= 500) {
-      log(`Gemini ${res.status}, warte ${15 * versuch}s ...`);
-      await sleep(15000 * versuch);
-      continue;
+  let nochmal = 0;
+  for (;;) {
+    if (ZEIT_UM()) throw new Error('Zeit abgelaufen.');
+    let res;
+    try {
+      res = await fetch(`${GEMINI}/models/${modell}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body, signal: AbortSignal.timeout(120000) });
+    } catch (e) {
+      if (nochmal++ < 1) { await sleep(5000); continue; }
+      throw new Error('Verbindung zu Gemini fehlgeschlagen: ' + e.message);
     }
     const daten = await res.json().catch(() => ({}));
     const meldung = daten?.error?.message || '';
     if (res.status === 401 || res.status === 403 || /api key not valid/i.test(meldung)) {
-      throw new SchluesselFehler(`Google lehnt den Gemini-Schlüssel ab (${res.status}: ${meldung.slice(0, 160) || 'ohne Begründung'}). Der Schlüssel hat ${key.trim().length} Zeichen${key !== key.trim() ? ', mit Leerzeichen/Zeilenumbruch am Rand' : ''}${/^AIza/.test(key.trim()) ? '' : ' und beginnt nicht mit „AIza“'}. Neuen Schlüssel auf aistudio.google.com/apikey erstellen und in GitHub als Secret GEMINI_API_KEY speichern.`);
+      throw new SchluesselFehler(`Google lehnt den Gemini-Schlüssel ab (${res.status}: ${meldung.slice(0, 160) || 'ohne Begründung'}). Der Schlüssel hat ${key.length} Zeichen${/^AIza/.test(key) ? '' : ' und beginnt nicht mit „AIza“'}. Neuen Schlüssel auf aistudio.google.com/apikey erstellen und in GitHub als Secret GEMINI_API_KEY speichern.`);
     }
-    if (res.status === 404 && versuch === 1) {
-      const liste = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { 'x-goog-api-key': key.trim() } }).then((r) => r.json()).catch(() => ({}));
-      const neu = modellWaehlen(liste.models);
-      if (neu && neu !== modell) { log(`Modell ${modell} gibt es nicht mehr – nehme ${neu}.`); modell = neu; continue; }
+    if (res.status === 429 || res.status === 404 || res.status >= 500) {
+      const grund = res.status === 429 ? 'Kontingent erschöpft' : res.status === 404 ? 'Modell gibt es nicht mehr' : 'überlastet';
+      // Einmal kurz warten (nur bei Überlastung oder Minuten-Limit), dann lieber ein anderes Modell als das Kontingent leerzufragen.
+      const tagesLimit = /per ?day|daily/i.test(meldung);
+      if (res.status !== 404 && !tagesLimit && nochmal++ < 1) { log(`Gemini ${res.status} (${meldung.slice(0, 90)}), warte 20s ...`); await sleep(20000); continue; }
+      nochmal = 0;
+      if (await naechstesModell(key, `${grund} (${res.status})`)) continue;
+      throw new KontingentFehler(`Gemini nimmt gerade nichts an (${res.status}: ${meldung.slice(0, 160) || grund}). Das kostenlose Kontingent ist vermutlich für heute aufgebraucht – morgen noch einmal „Run workflow“ starten.`);
     }
     if (!res.ok) throw new Error(`Gemini-Fehler ${res.status}: ${meldung || 'unbekannt'}`);
     const text = (daten.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
     if (!text) throw new Error('Gemini hat nichts geantwortet (' + (daten.candidates?.[0]?.finishReason || 'kein Grund') + ').');
     return jsonLesen(text);
   }
-  throw new Error('Gemini ist gerade überlastet (zu viele Versuche).');
 }
 
 const KATEGORIEN = ['Fleisch & Fisch', 'Milch & Käse', 'Eier', 'Obst', 'Gemüse', 'Brot & Backwaren', 'Nudeln, Reis & Getreide', 'Konserven & Saucen', 'Tiefkühl', 'Öl & Gewürze', 'Getränke', 'Snacks & Süßes', 'Sonstiges'];
@@ -179,14 +212,15 @@ async function angeboteLesen(cfg, name, seiten, katalog) {
   const alle = [];
   const prompt = lesePrompt(name, katalog);
   const ids = new Set(katalog.map((a) => a.id));
-  let fehler = 0;
-  for (let i = 0; i < seiten.length; i += 4) {
-    const gruppe = seiten.slice(i, i + 4);
-    log(`${name}: lese Seiten ${gruppe.map((s) => s.nummer).join(', ')}`);
+  let fehler = 0, abbruch = '';
+  const JE = 6; // wenige, größere Anfragen schonen das kostenlose Kontingent
+  for (let i = 0; i < seiten.length; i += JE) {
+    const gruppe = seiten.slice(i, i + JE);
+    log(`${name}: lese Seiten ${gruppe.map((s) => s.nummer).join(', ')} mit ${modell || cfg.modell}`);
     const parts = [{ text: prompt }];
     for (const s of gruppe) {
       let bild;
-      try { bild = await holen(s.bild, 'bytes'); } catch { bild = await holen(s.ersatz || s.bild, 'bytes'); }
+      try { bild = await holen(s.ersatz || s.bild, 'bytes'); } catch { bild = await holen(s.bild, 'bytes'); }
       parts.push({ text: `Prospektseite ${s.nummer}:` }, { inline_data: { mime_type: 'image/jpeg', data: bild.toString('base64') } });
     }
     try {
@@ -197,16 +231,18 @@ async function angeboteLesen(cfg, name, seiten, katalog) {
         if (!a.katalog_id) delete a.katalog_id; // die App ordnet dann selbst per Stichwort zu
         alle.push(a);
       }
+      log(`  ${alle.length} Angebote bisher`);
     } catch (e) {
       if (e instanceof SchluesselFehler) throw e; // weiterzumachen wäre sinnlos
       fehler++;
       log('  Seitengruppe übersprungen:', e.message);
+      if (e instanceof KontingentFehler || ZEIT_UM()) { abbruch = e.message; break; } // behalten, was schon gelesen ist
     }
-    await sleep(4000); // freundlich zum kostenlosen Kontingent
+    await sleep(6000);
   }
   const gesehen = new Set();
   const liste = alle.filter((a) => { const k = (a.produkt + '|' + a.preis).toLowerCase(); if (gesehen.has(k)) return false; gesehen.add(k); return true; });
-  if (liste.length < 5) throw new Error(`Nur ${liste.length} Angebote erkannt${fehler ? ` (${fehler} Seitengruppen fehlgeschlagen)` : ''} – Prospekt vermutlich nicht lesbar.`);
+  if (liste.length < 5) throw new Error(abbruch || `Nur ${liste.length} Angebote erkannt${fehler ? ` (${fehler} Seitengruppen fehlgeschlagen)` : ''} – Prospekt vermutlich nicht lesbar.`);
   return liste;
 }
 
