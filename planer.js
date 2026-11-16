@@ -55,13 +55,30 @@ export function standardEinstellungen(cfg = {}) {
     karte: cfg.kundenkarte !== false,
     kein_schwein: !!cfg.kein_schwein,
     vegetarisch: !!cfg.vegetarisch,
-    mag_nicht: [...(cfg.mag_nicht || [])],
+    // Bekannte Abneigungen aus der Konfiguration werden zu Schaltern, der Rest bleibt Freitext
+    nein_gruppen: ABNEIGUNGEN.filter(([id, name]) => (cfg.mag_nicht || []).some((x) => [id, lc(name)].includes(lc(x)))).map(([id]) => id),
+    mag_nicht: (cfg.mag_nicht || []).filter((x) => !ABNEIGUNGEN.some(([id, name]) => [id, lc(name)].includes(lc(x)))),
     mag_nicht_gerichte: [...(cfg.mag_nicht_gerichte || [])],
     favoriten: [],
     geraete: { airfryer: true, ofen: true, herd: true, mikrowelle: true, ...(cfg.geraete || {}) },
     airfryer_lieber: cfg.airfryer_lieber !== false,
   };
 }
+
+// Häufige Abneigungen zum Antippen: [id, Anzeige, Suchwörter (Name, ID oder Merkmal des Produkts)]
+export const ABNEIGUNGEN = [
+  ['pilze', 'Pilze', ['champignons', 'pilze']], ['bohnen', 'Bohnen', ['bohnen']], ['linsen', 'Linsen', ['linsen']],
+  ['kichererbsen', 'Kichererbsen', ['kichererbsen', 'hummus']], ['erbsen', 'Erbsen', ['erbsen (tk)']], ['mais', 'Mais', ['mais']],
+  ['fisch', 'Fisch (alle)', ['fisch']], ['lachs', 'Lachs', ['lachs']], ['thunfisch', 'Thunfisch', ['thunfisch']], ['garnelen', 'Garnelen', ['garnelen']],
+  ['rind', 'Rindfleisch', ['rinder']], ['gefluegel', 'Geflügel', ['hähnchen', 'puten']], ['eier', 'Eier', ['eier (']], ['tofu', 'Tofu', ['tofu']],
+  ['quark', 'Quark', ['quark']], ['skyr', 'Skyr', ['skyr']], ['huettenkaese', 'Hüttenkäse', ['körniger frischkäse']], ['hirtenkaese', 'Feta/Hirtenkäse', ['hirtenkäse']],
+  ['spinat', 'Spinat', ['spinat']], ['brokkoli', 'Brokkoli', ['brokkoli']], ['blumenkohl', 'Blumenkohl', ['blumenkohl']], ['kohl', 'Weißkohl', ['weißkohl']],
+  ['paprika', 'Paprika', ['paprika-mix']], ['zwiebeln', 'Zwiebeln', ['zwiebeln']], ['tomaten', 'Tomaten (frisch)', ['rispentomaten', 'cherrytomaten']],
+  ['gurke', 'Gurke', ['salatgurke', 'gewürzgurken']], ['zucchini', 'Zucchini', ['zucchini']], ['kuerbis', 'Kürbis', ['kürbis']],
+  ['suesskartoffeln', 'Süßkartoffeln', ['süßkartoffeln']], ['avocado', 'Avocado', ['avocado']], ['rotebete', 'Rote Bete', ['rote bete']],
+  ['kokos', 'Kokosmilch', ['kokosmilch']], ['nuesse', 'Nüsse', ['mandeln', 'walnuss']], ['erdnuss', 'Erdnussbutter', ['erdnuss']],
+  ['bananen', 'Bananen', ['bananen']], ['beeren', 'Beeren', ['beeren']],
+];
 
 export const FIGUREN = ['karotte', 'ei', 'avocado', 'brokkoli', 'tomate', 'blaubeere'];
 export const AKTIV = [[1.2, 'Kaum Bewegung (Bürojob)'], [1.4, 'Etwas Bewegung, 1–2× Sport'], [1.6, 'Aktiv, 3–4× Sport'], [1.8, 'Sehr aktiv, körperliche Arbeit']];
@@ -156,7 +173,8 @@ export function kontext(stamm, woche, ein, vorrat = {}) {
     }
   }
 
-  const nein = ein.mag_nicht.map(lc).filter(Boolean);
+  const gruppen = new Set(ein.nein_gruppen || []);
+  const nein = [...ein.mag_nicht.map(lc), ...ABNEIGUNGEN.filter(([id]) => gruppen.has(id)).flatMap(([, , w]) => w)].filter(Boolean);
   const gesperrt = (a) => {
     const tags = a.tags || [];
     if (ein.kein_schwein && tags.includes('schwein')) return true;

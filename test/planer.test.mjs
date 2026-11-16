@@ -150,3 +150,14 @@ test('eine einzelne Mahlzeit lässt sich aus einem Block herauslösen', () => {
   assert.deepEqual(P.planen(ctx, { seed: 2 }, plan).mittag.map((b) => b.n), [1, 1, 1, 2, 2], 'Aufteilung bleibt');
   assert.deepEqual(P.planen(ctx, { seed: 2, neuStruktur: true }, plan).mittag.map((b) => b.n), [3, 2, 2]);
 });
+
+test('Abneigungen als Schalter sperren die passenden Rezepte', () => {
+  const std = P.standardEinstellungen(cfg);
+  assert.ok(std.nein_gruppen.includes('pilze') && std.nein_gruppen.includes('thunfisch'), 'aus config.json übernommen');
+  const ohne = bau({ nein_gruppen: [], mag_nicht: [] });
+  const mit = bau({ nein_gruppen: ['linsen', 'fisch'], mag_nicht: [] });
+  assert.ok(mit.rezepte.size < ohne.rezepte.size);
+  for (const r of mit.rezepte.values()) for (const [id] of r.zutaten) {
+    assert.ok(!/linsen/.test(id) && !(mit.kat.get(id).tags || []).includes('fisch'), r.id + ' enthält ' + id);
+  }
+});

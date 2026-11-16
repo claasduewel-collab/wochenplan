@@ -1,7 +1,7 @@
 // Oberfläche der Wochenplan-App. Die Rechenlogik steckt in planer.js, die Figuren in figuren.js.
 // Alles läuft im Browser des Handys; Eingaben bleiben auf dem Gerät (localStorage).
 import {
-  MAHLZEITEN, GERAETE, LAEDEN, FIGUREN, AKTIV, ZIELE, standardEinstellungen, kontext, auswerten, planen, alternativen,
+  MAHLZEITEN, GERAETE, LAEDEN, FIGUREN, ABNEIGUNGEN, AKTIV, ZIELE, standardEinstellungen, kontext, auswerten, planen, alternativen,
   skaliert, naehrwerte, bedarfRechnen, zieleVon, blockTeilen, mengeText, gramm, vorratStatus, wochenStart, kandidaten,
 } from './planer.js';
 import { figur, FIGUR_FUER } from './figuren.js';
@@ -538,7 +538,10 @@ function profilAnsicht() {
       ${schalter('Kein Schweinefleisch', 'data-bool="kein_schwein"', ein.kein_schwein)}
       ${schalter('Vegetarisch', 'data-bool="vegetarisch"', ein.vegetarisch)}</section>
 
-    <h2>Mag ich nicht – Zutaten</h2><section class="card">${chips(ein.mag_nicht, 'mag_nicht')}
+    <h2>Was magst du nicht?</h2><section class="card">
+      <p class="muted klein" style="margin:0 0 8px">Antippen, was nie eingeplant werden soll. ${ctx.alle.size - ctx.rezepte.size} von ${ctx.alle.size} Rezepten fallen gerade weg.</p>
+      <div class="filter" style="flex-wrap:wrap;margin:0;padding:0;overflow:visible">${ABNEIGUNGEN.map(([id, name]) => `<button class="fchip" data-nein="${id}" aria-pressed="${(ein.nein_gruppen || []).includes(id)}">${esc(name)}</button>`).join('')}</div>
+      <p class="muted klein" style="margin:12px 0 6px">Sonst noch etwas?</p>${chips(ein.mag_nicht, 'mag_nicht')}
       <form class="add-row" data-form="mag_nicht"><input class="field" name="x" placeholder="z. B. Rosenkohl" autocomplete="off" enterkeyhint="done"><button class="btn">Hinzufügen</button></form></section>
 
     <h2>Abgewählte Gerichte</h2><section class="card">${chips(ein.mag_nicht_gerichte, 'mag_nicht_gerichte')}</section>`;
@@ -648,6 +651,8 @@ document.addEventListener('click', async (e) => {
   const pers = t.closest('[data-person]'); if (pers) { personBlatt(pers.dataset.person); return; }
   const pf = t.closest('[data-p-figur]'); if (pf) { const [pid, f] = pf.dataset.pFigur.split(':'); ein.profile.find((p) => p.id === pid).figur = f; rechnen(); personBlatt(pid); return; }
   const pw = t.closest('[data-p-weg]'); if (pw) { ein.profile = ein.profile.filter((p) => p.id !== pw.dataset.pWeg); blattZu(); neu(); return; }
+  const nn = t.closest('[data-nein]');
+  if (nn) { const id = nn.dataset.nein; const g = ein.nein_gruppen || []; ein.nein_gruppen = g.includes(id) ? g.filter((x) => x !== id) : [...g, id]; const y = scrollY; neu(); scrollTo(0, y); return; }
   const fc = t.closest('[data-filter]');
   if (fc) { const [g, w] = fc.dataset.filter.split(':'); filter[g] = w; render(); return; }
   const vr = t.closest('[data-vorrat]');
