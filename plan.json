@@ -1,6 +1,6 @@
 {
  "version": 2,
- "stand": "2026-11-16T15:16:03.059Z",
+ "stand": "2026-11-16T15:20:27.719Z",
  "laeden": {
   "lidl": {
    "name": "Lidl",
@@ -1376,7 +1376,7 @@
     }
    ],
    "fehler": "Der Gemini-Schlüssel ist ungültig. Neuen Schlüssel auf aistudio.google.com/apikey erstellen und in GitHub als Secret GEMINI_API_KEY speichern.",
-   "fehler_zeit": "2026-11-16T15:16:03.059Z"
+   "fehler_zeit": "2026-11-16T15:20:27.719Z"
   }
  }
 }
