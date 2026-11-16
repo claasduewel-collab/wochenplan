@@ -131,11 +131,11 @@ export function modellWaehlen(liste) {
 
 async function gemini(cfg, parts, { temperature = 0 } = {}) {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new SchluesselFehler('Der Gemini-Schlüssel fehlt (GitHub → Settings → Secrets and variables → Actions → GEMINI_API_KEY).');
+  if (!key || !key.trim()) throw new SchluesselFehler('Der Gemini-Schlüssel fehlt (GitHub → Settings → Secrets and variables → Actions → GEMINI_API_KEY).');
   modell ||= cfg.modell || 'gemini-2.5-flash';
   const body = JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { temperature, responseMimeType: 'application/json' } });
   for (let versuch = 1; versuch <= 6; versuch++) {
-    const res = await fetch(`${GEMINI}/models/${modell}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body });
+    const res = await fetch(`${GEMINI}/models/${modell}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key.trim() }, body });
     if (res.status === 429 || res.status >= 500) {
       log(`Gemini ${res.status}, warte ${15 * versuch}s ...`);
       await sleep(15000 * versuch);
@@ -144,10 +144,10 @@ async function gemini(cfg, parts, { temperature = 0 } = {}) {
     const daten = await res.json().catch(() => ({}));
     const meldung = daten?.error?.message || '';
     if (res.status === 401 || res.status === 403 || /api key not valid/i.test(meldung)) {
-      throw new SchluesselFehler('Der Gemini-Schlüssel ist ungültig. Neuen Schlüssel auf aistudio.google.com/apikey erstellen und in GitHub als Secret GEMINI_API_KEY speichern.');
+      throw new SchluesselFehler(`Google lehnt den Gemini-Schlüssel ab (${res.status}: ${meldung.slice(0, 160) || 'ohne Begründung'}). Der Schlüssel hat ${key.trim().length} Zeichen${key !== key.trim() ? ', mit Leerzeichen/Zeilenumbruch am Rand' : ''}${/^AIza/.test(key.trim()) ? '' : ' und beginnt nicht mit „AIza“'}. Neuen Schlüssel auf aistudio.google.com/apikey erstellen und in GitHub als Secret GEMINI_API_KEY speichern.`);
     }
     if (res.status === 404 && versuch === 1) {
-      const liste = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } }).then((r) => r.json()).catch(() => ({}));
+      const liste = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { 'x-goog-api-key': key.trim() } }).then((r) => r.json()).catch(() => ({}));
       const neu = modellWaehlen(liste.models);
       if (neu && neu !== modell) { log(`Modell ${modell} gibt es nicht mehr – nehme ${neu}.`); modell = neu; continue; }
     }
