@@ -42,8 +42,11 @@ export function standardEinstellungen(cfg = {}) {
     mz[m.id] = { an: c ? c.an !== false : true, tage: (c && c.tage) || m.tage, kalt: c ? c.art === 'kalt' : false };
   }
   return {
-    personen: cfg.personen || 2,
-    ziele: { kcal: 2200, protein: 150, fett: 75, kh: 220, ...(cfg.ziele || {}) },
+    profile: cfg.profile || Array.from({ length: cfg.personen || 2 }, (_, i) => ({
+      id: 'p' + (i + 1), name: i === 0 ? cfg.name || 'Ich' : 'Person ' + (i + 1), figur: FIGUREN[i % FIGUREN.length],
+      geschlecht: 'm', alter: 30, groesse: 178, gewicht: 80, aktiv: 1.4, ziel: 'halten',
+      manuell: !!cfg.ziele, ...(cfg.ziele || {}), extras: i === 0,
+    })),
     extras: cfg.feste_extras || [],
     mahlzeiten: mz,
     tage: (cfg.tage || []).length || 7,
@@ -59,6 +62,25 @@ export function standardEinstellungen(cfg = {}) {
     airfryer_lieber: cfg.airfryer_lieber !== false,
   };
 }
+
+export const FIGUREN = ['karotte', 'ei', 'avocado', 'brokkoli', 'tomate', 'blaubeere'];
+export const AKTIV = [[1.2, 'Kaum Bewegung (Bürojob)'], [1.4, 'Etwas Bewegung, 1–2× Sport'], [1.6, 'Aktiv, 3–4× Sport'], [1.8, 'Sehr aktiv, körperliche Arbeit']];
+export const ZIELE = [['abnehmen', 'Abnehmen'], ['halten', 'Gewicht halten'], ['aufbauen', 'Muskeln aufbauen']];
+
+/** Kalorien- und Makrobedarf aus Körperdaten (Mifflin-St Jeor). Richtwerte, keine medizinische Beratung. */
+export function bedarfRechnen(p) {
+  const w = Number(p.gewicht) || 75, h = Number(p.groesse) || 175, a = Number(p.alter) || 30;
+  const grund = 10 * w + 6.25 * h - 5 * a + (p.geschlecht === 'w' ? -161 : 5);
+  const umsatz = grund * (Number(p.aktiv) || 1.4);
+  const kcal = Math.round(umsatz * (p.ziel === 'abnehmen' ? 0.8 : p.ziel === 'aufbauen' ? 1.1 : 1) / 10) * 10;
+  const protein = Math.round(w * (p.ziel === 'halten' ? 1.6 : 2));
+  const fett = Math.round(w * 0.9);
+  const kh = Math.max(0, Math.round((kcal - protein * 4 - fett * 9) / 4));
+  return { kcal, protein, fett, kh, grund: Math.round(grund), umsatz: Math.round(umsatz) };
+}
+export const zieleVon = (p) => (p.manuell
+  ? { kcal: Number(p.kcal) || 2000, protein: Number(p.protein) || 120, fett: Number(p.fett) || 70, kh: Number(p.kh) || 200 }
+  : bedarfRechnen(p));
 
 export const aktiveSlots = (ein) => MAHLZEITEN.filter((m) => ein.mahlzeiten[m.id]?.an);
 
@@ -159,11 +181,13 @@ export function kontext(stamm, woche, ein, vorrat = {}) {
   const slots = aktiveSlots(ein);
   const summe = slots.reduce((s, m) => s + m.anteil, 0) || 1;
   const ex = (ein.extras || []).reduce((s, e) => [s[0] + (e.kcal || 0), s[1] + (e.protein || 0), s[2] + (e.fett || 0), s[3] + (e.kh || 0)], [0, 0, 0, 0]);
+  const personen = ein.profile.map((p) => ({ ...p, z: zieleVon(p), ex: p.extras ? ex : [0, 0, 0, 0] }));
   const ziel = {};
-  for (const m of slots) {
-    ziel[m.id] = { kcal: Math.max(0, ein.ziele.kcal - ex[0]) * m.anteil / summe, protein: Math.max(0, ein.ziele.protein - ex[1]) * m.anteil / summe };
+  for (const p of personen) {
+    ziel[p.id] = {};
+    for (const m of slots) ziel[p.id][m.id] = { kcal: Math.max(0, p.z.kcal - p.ex[0]) * m.anteil / summe, protein: Math.max(0, p.z.protein - p.ex[1]) * m.anteil / summe };
   }
-  return { ein, kat, rezepte, alle, angebote, laden: laden || null, vorrat, slots, ziel, extras: ex, cache: new Map() };
+  return { ein, kat, rezepte, alle, angebote, laden: laden || null, vorrat, slots, ziel, personen, cache: new Map() };
 }
 
 export const naehrwerte = (ctx, zutaten) => {
@@ -173,11 +197,11 @@ export const naehrwerte = (ctx, zutaten) => {
 };
 
 /** Passt ein Rezept an das Kalorien- und Proteinziel der Mahlzeit an. Liefert Zutaten je Portion. */
-export function skaliert(ctx, r, slot) {
-  const key = r.id + '|' + slot;
+export function skaliert(ctx, r, slot, pid = ctx.personen[0]?.id) {
+  const key = r.id + '|' + slot + '|' + pid;
   let hit = ctx.cache.get(key);
   if (hit) return hit;
-  const z = ctx.ziel[slot] || { kcal: 0, protein: 0 };
+  const z = ctx.ziel[pid]?.[slot] || { kcal: 0, protein: 0 };
   let Pk = 0, Pp = 0, Kk = 0, Kp = 0, Xk = 0, Xp = 0;
   for (const [id, g] of r.zutaten) {
     const a = ctx.kat.get(id);
@@ -271,30 +295,42 @@ const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h
 
 /**
  * Rechnet einen Plan durch: Portionen, Einkauf, Kosten, Reste, Nährwerte je Tag, Hinweise und eine Bewertung.
- * zustand = {aus: {'mittag:3': true} (Tag ausgelassen), fertig: {'mittag:0': true} (Block schon gekocht), seed, letzte: [Rezept-IDs der Vorwoche]}
+ * zustand = {wer: {'mittag:3': ['p1']} (wer an dem Tag mitisst; fehlt = alle, [] = niemand),
+ *            fertig: {'mittag:0': true} (Block ab Tag 0 schon gekocht), seed, letzte: [Rezept-IDs der Vorwoche]}
  */
 export function auswerten(ctx, plan, zustand = {}) {
   const { ein, kat } = ctx;
-  const P = ein.personen, D = ein.tage;
-  const aus = zustand.aus || {}, fertig = zustand.fertig || {};
+  const leute = ctx.personen, P = leute.length || 1, D = ein.tage;
+  const wer = zustand.wer || {}, fertig = zustand.fertig || {};
+  const alleIds = leute.map((p) => p.id);
+  const esserAm = (slot, d) => { const w = wer[slot + ':' + d]; return w ? w.filter((id) => alleIds.includes(id)) : alleIds; };
   const bloecke = [];
   for (const s of ctx.slots) {
     let tag = 0;
     (plan[s.id] || []).forEach((b, i) => {
-      const tage = [];
-      for (let d = tag; d < tag + b.n; d++) if (!aus[s.id + ':' + d]) tage.push(d);
       const r = b.r ? ctx.alle.get(b.r) : null;
-      bloecke.push({ slot: s.id, i, start: tag, n: b.n, tage, r, fix: !!b.fix, fertig: !!fertig[s.id + ':' + i], portionen: P * tage.length, sk: r ? skaliert(ctx, r, s.id) : null, hinweise: [] });
+      const tage = [], mal = new Map();
+      for (let d = tag; d < tag + b.n; d++) {
+        const e = esserAm(s.id, d);
+        if (e.length) tage.push(d);
+        for (const id of e) mal.set(id, (mal.get(id) || 0) + 1);
+      }
+      const sk = new Map();
+      if (r) for (const id of mal.keys()) sk.set(id, skaliert(ctx, r, s.id, id));
+      bloecke.push({ slot: s.id, i, start: tag, n: b.n, tage, mal, r, fix: !!b.fix, fertig: !!fertig[s.id + ':' + tag], portionen: [...mal.values()].reduce((x, y) => x + y, 0), sk, hinweise: [] });
       tag += b.n;
     });
   }
 
   const bedarf = new Map();
   for (const b of bloecke) {
-    if (!b.r || !b.portionen || b.fertig) continue;
-    for (const [id, g] of b.sk.z) {
+    if (!b.r || !b.portionen) continue;
+    b.gesamt = new Map(); // Zutat → Gramm für alle Esser und Tage des Blocks
+    for (const [pid, n] of b.mal) for (const [id, g] of b.sk.get(pid).z) b.gesamt.set(id, (b.gesamt.get(id) || 0) + g * n);
+    if (b.fertig) continue;
+    for (const [id, g] of b.gesamt) {
       const e = bedarf.get(id) || { g: 0, von: [] };
-      e.g += g * b.portionen;
+      e.g += g;
       if (!e.von.includes(b.r.name)) e.von.push(b.r.name);
       bedarf.set(id, e);
     }
@@ -330,8 +366,16 @@ export function auswerten(ctx, plan, zustand = {}) {
   // Nährwerte je Portion mit den tatsächlichen (auf Packungen gerundeten) Mengen
   for (const b of bloecke) {
     if (!b.r) continue;
-    b.z = b.sk.z.map(([id, g]) => [id, b.fertig ? g : g * (faktor.get(id) ?? 1)]);
-    b.nw = naehrwerte(ctx, b.z);
+    const f = (id) => (b.fertig ? 1 : faktor.get(id) ?? 1);
+    b.zP = new Map(); b.nwP = new Map(); // je Person: Zutaten und Nährwerte einer Portion
+    for (const [pid, sk] of b.sk) {
+      const z = sk.z.map(([id, g]) => [id, g * f(id)]);
+      b.zP.set(pid, z); b.nwP.set(pid, naehrwerte(ctx, z));
+    }
+    b.menge = new Map([...(b.gesamt || [])].map(([id, g]) => [id, g * f(id)]));
+    const erster = b.zP.keys().next().value;
+    b.z = erster ? b.zP.get(erster) : skaliert(ctx, b.r, b.slot).z;
+    b.nw = erster ? b.nwP.get(erster) : naehrwerte(ctx, b.z);
     if (!b.portionen || b.fertig) continue;
     for (const [id] of b.z) {
       const a = kat.get(id);
@@ -351,26 +395,31 @@ export function auswerten(ctx, plan, zustand = {}) {
 
   const tage = [];
   for (let d = 0; d < D; d++) {
-    const n = [...ctx.extras];
-    const slots = {};
+    const nP = new Map(), slots = {};
     for (const b of bloecke) {
       if (!b.r || !b.tage.includes(d)) continue;
       slots[b.slot] = b;
-      for (let i = 0; i < 4; i++) n[i] += b.nw[i];
+      for (const pid of esserAm(b.slot, d)) {
+        if (!nP.has(pid)) nP.set(pid, [...leute.find((p) => p.id === pid).ex]);
+        const n = nP.get(pid), nw = b.nwP.get(pid);
+        for (let i = 0; i < 4; i++) n[i] += nw[i];
+      }
     }
-    tage.push({ d, slots, n });
+    tage.push({ d, slots, nP });
   }
 
   // Bewertung (kleiner = besser)
   const U = P;
   let strafe = 0;
-  const z = ein.ziele;
   for (const t of tage) {
-    if (!Object.keys(t.slots).length) continue;
-    strafe += Math.max(0, z.protein - t.n[1]) * 0.02 * P;
-    strafe += Math.max(0, Math.abs(t.n[0] - z.kcal) / z.kcal - 0.07) * 4 * P;
-    if (z.fett) strafe += Math.max(0, t.n[2] - z.fett * 1.15) * 0.03 * P;
-    if (z.kh) strafe += Math.max(0, z.kh * 0.7 - t.n[3]) * 0.01 * P;
+    for (const [pid, n] of t.nP) {
+      const z = leute.find((p) => p.id === pid).z;
+      const anteil = Object.keys(t.slots).length / ctx.slots.length; // Teil-Tage (nur einzelne Mahlzeiten) fair bewerten
+      strafe += Math.max(0, z.protein * anteil - n[1]) * 0.02;
+      if (anteil === 1) strafe += Math.max(0, Math.abs(n[0] - z.kcal) / z.kcal - 0.07) * 4;
+      if (z.fett) strafe += Math.max(0, n[2] - z.fett * 1.15) * 0.03;
+      if (z.kh && anteil === 1) strafe += Math.max(0, z.kh * 0.7 - n[3]) * 0.01;
+    }
   }
   const gesehen = new Map();
   const rnd = (id) => (hash(String(zustand.seed || 0) + id) % 1000) / 1000;
@@ -420,7 +469,8 @@ export function planen(ctx, zustand = {}, alt = null) {
   const pools = {}, geruest = {};
   for (const s of ctx.slots) {
     pools[s.id] = kandidaten(ctx, s.id);
-    const groessen = teilen(ein.tage, ein.mahlzeiten[s.id].tage);
+    const vorhanden = !zustand.neuStruktur && alt?.[s.id]?.length && alt[s.id].reduce((x, b) => x + b.n, 0) === ein.tage;
+    const groessen = vorhanden ? alt[s.id].map((b) => b.n) : teilen(ein.tage, ein.mahlzeiten[s.id].tage);
     geruest[s.id] = groessen.map((n, i) => {
       const a = alt?.[s.id]?.[i];
       return a && a.fix && a.n === n && (a.r === null || ctx.rezepte.has(a.r)) ? { ...a } : { r: null, n, fix: false };
@@ -480,6 +530,23 @@ export function alternativen(ctx, plan, slot, i, zustand = {}) {
     });
   }
   return liste.sort((x, y) => x.score - y.score);
+}
+
+/** Macht aus Tag d einen eigenen Block (für „nur diese eine Mahlzeit“). Liefert dessen Index. */
+export function blockTeilen(plan, slot, d) {
+  const neu = [];
+  let tag = 0, idx = -1;
+  for (const b of plan[slot]) {
+    if (d >= tag && d < tag + b.n) {
+      if (d > tag) neu.push({ ...b, n: d - tag });
+      idx = neu.length;
+      neu.push({ ...b, n: 1 });
+      if (d < tag + b.n - 1) neu.push({ ...b, n: tag + b.n - 1 - d });
+    } else neu.push(b);
+    tag += b.n;
+  }
+  plan[slot] = neu;
+  return idx;
 }
 
 // ------------------------------------------------------------------ Anzeige-Helfer

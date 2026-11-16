@@ -163,3 +163,62 @@ nav .wrap{display:grid;grid-template-columns:repeat(6,1fr);padding:0 4px}
 nav button{background:none;border:0;color:var(--muted);font-size:10.5px;font-weight:600;padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav button[aria-current="page"]{color:var(--accent)}
+
+/* ---------- Figuren & freundlicheres Design ---------- */
+:root{--fr:#f4a300;--sn:#6b6ee6;--mi:#3f9d57;--ab:#e5553f}
+.figur{display:block;flex:0 0 auto;overflow:visible;animation:wippen 3.2s ease-in-out infinite}
+.figur.ruhig{animation:none}
+.figur .auge{animation:blinzeln 4.6s infinite}
+.figur .winkarm{animation:winken 3.2s ease-in-out infinite}
+@keyframes wippen{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes blinzeln{0%,94%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+@keyframes winken{0%,60%,100%{transform:rotate(0)}70%{transform:rotate(-22deg)}80%{transform:rotate(8deg)}90%{transform:rotate(-16deg)}}
+@media (prefers-reduced-motion: reduce){.figur,.figur .auge,.figur .winkarm{animation:none}}
+
+.held{position:relative;border:0;color:#fff;background:linear-gradient(135deg,#2f7d44 0%,#3fa35b 55%,#7cc46a 100%);overflow:hidden;padding:18px 16px 16px}
+.held::after{content:"";position:absolute;right:-40px;top:-50px;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,.12)}
+.held .oben{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+.held .gruss{font-size:15px;opacity:.92}
+.held .big{font-size:34px;line-height:1.1}
+.held .fakten{position:relative;z-index:1}
+.held .pill{background:rgba(255,255,255,.2);border-color:transparent;color:#fff}
+.held .pill.warn{background:#fff3cd;color:#7a5200}
+.held .aktionen{position:relative;z-index:1}
+.held .btn{background:#fff;color:#1f5a30}
+.held .btn.ghost{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.35)}
+.held select.field{background-color:rgba(255,255,255,.95);color:#1d211c;border-color:transparent}
+@media (prefers-color-scheme: dark){.held{background:linear-gradient(135deg,#1f5a30 0%,#2c7a43 60%,#4c9a4a 100%)}}
+
+.card.mahl{border-top:4px solid var(--farbe,var(--accent));padding-top:12px}
+.mahl-kopf{display:flex;align-items:center;gap:10px}
+.mahl-kopf .slot{flex:1}
+.wer{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
+.wer > span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-right:2px}
+.kopf-btn{display:inline-flex;align-items:center;gap:4px;border:1.5px solid var(--line);background:var(--bg);border-radius:999px;padding:2px 10px 2px 3px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
+.kopf-btn[aria-pressed="false"]{opacity:.42;filter:grayscale(1)}
+.kopf-btn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.pers-zeile{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin:3px 0}
+.pers-zeile b{color:var(--ink)}
+.ing li button.art{background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.ing small{display:block;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+
+.kacheln{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.kachel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 4px;text-align:center}
+.kachel b{display:block;font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.kachel span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+
+.wahl{display:grid;gap:10px;margin:12px 0}
+.wahl button{display:flex;align-items:center;gap:12px;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:12px 14px;font-size:16px;font-weight:650;cursor:pointer;color:var(--ink)}
+.wahl button small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.wahl button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.wahl.raster{grid-template-columns:1fr 1fr}
+.wahl.tage{grid-template-columns:repeat(4,1fr)}
+.wahl.tage button{justify-content:center;padding:10px 4px;font-size:15px;text-align:center;flex-direction:column;gap:0}
+.schritt{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:650}
+.frage{font-size:22px;font-weight:700;letter-spacing:-.02em;margin:2px 0 4px}
+.figuren-wahl{display:flex;gap:6px;flex-wrap:wrap}
+.figuren-wahl button{border:2px solid var(--line);background:var(--card);border-radius:14px;padding:4px;cursor:pointer}
+.figuren-wahl button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.person-karte{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
+.person-karte:first-child{border-top:0}
+.empty .figur{margin:0 auto 8px}

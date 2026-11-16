@@ -60,7 +60,7 @@ test('skaliert trifft das Kalorienziel der Mahlzeit ungefähr', () => {
   let ok = 0, n = 0;
   for (const r of ctx.rezepte.values()) for (const m of r.mahlzeit) {
     const s = P.skaliert(ctx, r, m); n++;
-    if (Math.abs(s.n[0] - ctx.ziel[m].kcal) / ctx.ziel[m].kcal < 0.2) ok++;
+    if (Math.abs(s.n[0] - ctx.ziel.p1[m].kcal) / ctx.ziel.p1[m].kcal < 0.2) ok++;
   }
   assert.ok(ok / n > 0.85, `${ok}/${n} Rezepte im Rahmen`);
 });
@@ -80,7 +80,10 @@ test('planen: vollständig, stabil, ohne Abgewähltes, ohne doppelte Gerichte', 
   for (const b of plan.mittag) assert.ok(ctx.alle.get(b.r).tags.includes('kalt'), 'Mittag kalt');
   const e = P.auswerten(ctx, plan, { seed: 3 });
   assert.ok(e.kosten > 20 && e.kosten < 200);
-  for (const t of e.tage) assert.ok(Math.abs(t.n[0] - ctx.ein.ziele.kcal) / ctx.ein.ziele.kcal < 0.15, 'Tageskalorien ' + Math.round(t.n[0]));
+  for (const t of e.tage) for (const [pid, n] of t.nP) {
+    const z = ctx.personen.find((p) => p.id === pid).z;
+    assert.ok(Math.abs(n[0] - z.kcal) / z.kcal < 0.15, 'Tageskalorien ' + Math.round(n[0]));
+  }
 });
 
 test('gewählte Gerichte bleiben beim Neuplanen stehen', () => {
@@ -98,14 +101,17 @@ test('Vorrat senkt den Einkauf, mehr Personen erhöhen ihn', () => {
   const mit = P.auswerten(bau({}, { [erster.a.id]: erster.bedarf * 2 }), plan, { seed: 1 });
   assert.ok(mit.kosten < ohne.kosten);
   assert.ok(!mit.einkauf.some((x) => x.a.id === erster.a.id));
-  assert.ok(P.auswerten(bau({ personen: 4 }), plan, { seed: 1 }).kosten > ohne.kosten * 1.5);
+  const std = P.standardEinstellungen(cfg);
+  const vier = [...std.profile, ...std.profile.map((p, i) => ({ ...p, id: 'x' + i }))];
+  assert.ok(P.auswerten(bau({ profile: vier }), plan, { seed: 1 }).kosten > ohne.kosten * 1.5);
 });
 
 test('Tag auslassen und "zubereitet" verringern den Bedarf', () => {
   const ctx = bau();
   const plan = P.planen(ctx, { seed: 1 });
   const voll = P.auswerten(ctx, plan, {});
-  assert.ok(P.auswerten(ctx, plan, { aus: { 'abend:0': true, 'abend:1': true } }).portionen < voll.portionen);
+  assert.ok(P.auswerten(ctx, plan, { wer: { 'abend:0': [], 'abend:1': [] } }).portionen < voll.portionen);
+  assert.equal(P.auswerten(ctx, plan, { wer: { 'abend:0': ['p1'] } }).portionen, voll.portionen - 1, 'nur eine Person isst mit');
   assert.ok(P.auswerten(ctx, plan, { fertig: { 'abend:0': true } }).portionen < voll.portionen);
 });
 
@@ -116,4 +122,31 @@ test('alternativen liefert sortierte Vorschläge mit Preisunterschied', () => {
   assert.ok(alt.length > 10);
   assert.ok(alt.some((x) => x.aktuell && x.kosten === 0));
   for (let i = 1; i < alt.length; i++) assert.ok(alt[i - 1].score <= alt[i].score);
+});
+
+test('Bedarf aus Körperdaten und eigene Ziele je Person', () => {
+  const b = P.bedarfRechnen({ geschlecht: 'm', alter: 30, groesse: 180, gewicht: 80, aktiv: 1.4, ziel: 'halten' });
+  assert.equal(b.grund, 1780);            // 10*80 + 6.25*180 - 5*30 + 5
+  assert.equal(b.kcal, 2490);
+  assert.equal(b.protein, 128);
+  assert.ok(P.bedarfRechnen({ geschlecht: 'w', alter: 30, groesse: 165, gewicht: 60, aktiv: 1.4, ziel: 'abnehmen' }).kcal < 1600);
+  const std = P.standardEinstellungen(cfg);
+  const klein = { ...std.profile[1], manuell: false, geschlecht: 'w', gewicht: 58, groesse: 165, ziel: 'abnehmen' };
+  const ctx = bau({ profile: [std.profile[0], klein] });
+  const plan = P.planen(ctx, { seed: 1 });
+  const e = P.auswerten(ctx, plan, { seed: 1 });
+  const bl = e.bloecke.find((x) => x.slot === 'abend');
+  assert.ok(bl.nwP.get('p2')[0] < bl.nwP.get('p1')[0] * 0.85, 'kleinere Portion für Person 2');
+});
+
+test('eine einzelne Mahlzeit lässt sich aus einem Block herauslösen', () => {
+  const ctx = bau();
+  const plan = P.planen(ctx, { seed: 1 });
+  const vorher = plan.mittag.map((b) => b.n);
+  const i = P.blockTeilen(plan, 'mittag', 1);
+  assert.deepEqual(vorher, [3, 2, 2]);
+  assert.deepEqual(plan.mittag.map((b) => b.n), [1, 1, 1, 2, 2]);
+  assert.equal(i, 1);
+  assert.deepEqual(P.planen(ctx, { seed: 2 }, plan).mittag.map((b) => b.n), [1, 1, 1, 2, 2], 'Aufteilung bleibt');
+  assert.deepEqual(P.planen(ctx, { seed: 2, neuStruktur: true }, plan).mittag.map((b) => b.n), [3, 2, 2]);
 });
